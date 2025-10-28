@@ -439,7 +439,14 @@ const Game = (() => {
     const backBtn = document.createElement('button');
     backBtn.className = 'btn ghost';
     backBtn.textContent = 'ロビーへ';
-    backBtn.addEventListener('click', () => location.reload());
+    backBtn.addEventListener('click', () => {
+      const ok = window.confirm('ゲームを終了しますか？（ゲームの情報は失われます）');
+      if (!ok) return;
+
+      try { localStorage.removeItem('pitango.gameState.v1'); } catch(_) {}
+      try { localStorage.removeItem('pitango.sessionSnapshot.v1'); } catch(_) {}
+      location.reload();
+    });
     ctrls.append(undoBtn, saveBtn, backBtn);
 
     header.append(word, ctrls);

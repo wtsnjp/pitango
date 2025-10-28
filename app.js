@@ -29,11 +29,6 @@
         if (obj && typeof obj === 'object') Object.assign(state, obj);
       } catch(_){}
     },
-    save() {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-      UI.render();
-      UI.flashNote('保存しました');
-    },
     snapshotSession() {
       localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({
         players: state.players,
@@ -120,10 +115,6 @@
         Store.snapshotSession();
       });
 
-      $('#btnSave').addEventListener('click', () => {
-        UI.syncFromDOM();
-        Store.save();
-      });
       $('#btnReset').addEventListener('click', () => {
         if (!confirm('ロビーを初期化しますか？（保存内容は消えます）')) return;
         localStorage.removeItem(STORAGE_KEY);
@@ -239,39 +230,6 @@
     })(),
 
     render() { this.renderAll(); },
-
-    syncFromDOM() {
-      const perHandEl = $('#perHand');
-      const seedEl = $('#seed');
-      const challengesEl = $('#optChallenges');
-      const timerEl = $('#optTimer');
-      const timerSecEl = $('#timerSec');
-      const cardsEl = $('#cardText');
-
-      if (perHandEl) state.perHand = Math.max(1, Math.min(20, Number(perHandEl.value) || 1));
-      if (seedEl) state.seed = seedEl.value || '';
-      if (challengesEl) state.options.challenges = !!challengesEl.checked;
-      if (timerEl) state.options.timer = !!timerEl.checked;
-      if (timerSecEl) state.options.timerSec = Math.max(5, Math.min(180, Number(timerSecEl.value) || 30));
-      if (cardsEl) state.cardsRaw = cardsEl.value ?? '';
-
-      // プレイヤー名（DOM順に）を state へ反映
-      const rows = $$('#playerList .player-item');
-      rows.forEach((row, idx) => {
-        const id = row.dataset.id;
-        const nameInput = row.querySelector('[data-role="name"]');
-        const p = state.players.find(x => x.id === id);
-        if (p && nameInput) p.name = nameInput.value;
-        // 並び順もDOMに合わせて揃える
-        if (id && state.players[idx]?.id !== id) {
-          const curIndex = state.players.findIndex(x => x.id === id);
-          if (curIndex > -1) {
-            const [m] = state.players.splice(curIndex, 1);
-            state.players.splice(idx, 0, m);
-          }
-        }
-      });
-    }
   };
 
   // ===== Simple Router (placeholder) =====

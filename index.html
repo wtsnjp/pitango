@@ -22,7 +22,6 @@
       <h2>プレイヤー（1〜10人）</h2>
       <div class="row gap-md">
         <button class="btn primary" id="btnAdd">＋ 追加</button>
-        <button class="btn" id="btnShuffle">順番をランダムに</button>
         <button class="btn" id="btnClearPlayers">全員削除</button>
         <span class="count-chip" id="playerCount">0 人</span>
       </div>
@@ -52,23 +51,6 @@
           <input id="startWord" type="text" value="しりとり" />
         </div>
         <div></div>
-      </div>
-
-      <div class="row gap-md wrap">
-        <label class="switch">
-          <input type="checkbox" id="optChallenges" checked>
-          <span class="track"><span class="thumb"></span></span>
-          <span class="muted">イエローカード（合議）を記録</span>
-        </label>
-        <label class="switch">
-          <input type="checkbox" id="optTimer">
-          <span class="track"><span class="thumb"></span></span>
-          <span class="muted">ターンタイマー</span>
-        </label>
-        <div class="timer-box">
-          <label for="timerSec">秒</label>
-          <input id="timerSec" type="number" min="5" max="180" value="30" />
-        </div>
       </div>
 
       <div class="footer">

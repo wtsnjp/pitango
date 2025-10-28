@@ -15,7 +15,6 @@
     players: [], // {id, name, color}
     perHand: 7,
     seed: '',
-    options: { challenges: true, timer: false, timerSec: 30 },
     cardsRaw: ''
   };
 
@@ -81,16 +80,10 @@
     syncFromDOM() {
       const perHandEl = $('#perHand');
       const seedEl = $('#seed');
-      const challengesEl = $('#optChallenges');
-      const timerEl = $('#optTimer');
-      const timerSecEl = $('#timerSec');
       const cardsEl = $('#cardText');
 
       if (perHandEl) state.perHand = Math.max(1, Math.min(20, Number(perHandEl.value) || 1));
       if (seedEl) state.seed = seedEl.value || '';
-      if (challengesEl) state.options.challenges = !!challengesEl.checked;
-      if (timerEl) state.options.timer = !!timerEl.checked;
-      if (timerSecEl) state.options.timerSec = Math.max(5, Math.min(180, Number(timerSecEl.value) || 30));
       if (cardsEl) state.cardsRaw = cardsEl.value ?? '';
 
       const rows = $$('#playerList .player-item');
@@ -112,13 +105,9 @@
     bind() {
       $('#btnAdd').addEventListener('click', () => this.addPlayer(''));
       $('#btnClearPlayers').addEventListener('click', () => { state.players = []; this.renderPlayers(); this.persistDeferred(); });
-      $('#btnShuffle').addEventListener('click', () => this.shufflePlayers());
 
       $('#perHand').addEventListener('input', e => { state.perHand = Math.max(1, Math.min(20, Number(e.target.value)||1)); this.updateStatsBar(); this.persistDeferred(); });
       $('#seed').addEventListener('input', e => { state.seed = e.target.value; this.persistDeferred(); });
-      $('#optChallenges').addEventListener('change', e => { state.options.challenges = e.target.checked; this.persistDeferred(); });
-      $('#optTimer').addEventListener('change', e => { state.options.timer = e.target.checked; this.persistDeferred(); });
-      $('#timerSec').addEventListener('input', e => { state.options.timerSec = Math.max(5, Math.min(180, Number(e.target.value)||30)); this.persistDeferred(); });
 
       $('#btnLoadDefault').addEventListener('click', () => this.loadDefaultCards());
       $('#btnClean').addEventListener('click', () => { state.cardsRaw = Utils.sanitizeCards($('#cardText').value).join('\n'); this.renderCards(); this.persistDeferred(); });
@@ -170,7 +159,6 @@
         if (!confirm('ロビーを初期化しますか？（保存内容は消えます）')) return;
         localStorage.removeItem(STORAGE_KEY);
         state.players = []; state.perHand = 7; state.seed = '';
-        state.options = {challenges:true, timer:false, timerSec:30};
         state.cardsRaw = '';
         this.renderAll();
       });
@@ -186,15 +174,6 @@
     },
     removePlayer(id) {
       state.players = state.players.filter(p => p.id !== id);
-      this.renderPlayers();
-      this.persistDeferred();
-    },
-    shufflePlayers() {
-      const arr = state.players;
-      for (let i = arr.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [arr[i], arr[j]] = [arr[j], arr[i]];
-      }
       this.renderPlayers();
       this.persistDeferred();
     },

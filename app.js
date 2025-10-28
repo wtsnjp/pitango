@@ -1,5 +1,4 @@
-// Pitango-style game — Client-only, modular, light theme
-// 今後の拡張（ゲーム画面・結果画面）を見据えて単純なView RouterとStoreを用意
+// A Pitango-style game
 
 (() => {
   // ===== Constants / Tokens =====
@@ -79,6 +78,37 @@
       if (state.players.length === 0) this.addPlayer('');
       this.renderAll();
     },
+    syncFromDOM() {
+      const perHandEl = $('#perHand');
+      const seedEl = $('#seed');
+      const challengesEl = $('#optChallenges');
+      const timerEl = $('#optTimer');
+      const timerSecEl = $('#timerSec');
+      const cardsEl = $('#cardText');
+
+      if (perHandEl) state.perHand = Math.max(1, Math.min(20, Number(perHandEl.value) || 1));
+      if (seedEl) state.seed = seedEl.value || '';
+      if (challengesEl) state.options.challenges = !!challengesEl.checked;
+      if (timerEl) state.options.timer = !!timerEl.checked;
+      if (timerSecEl) state.options.timerSec = Math.max(5, Math.min(180, Number(timerSecEl.value) || 30));
+      if (cardsEl) state.cardsRaw = cardsEl.value ?? '';
+
+      const rows = $$('#playerList .player-item');
+      rows.forEach((row, idx) => {
+        const id = row.dataset.id;
+        const nameInput = row.querySelector('[data-role="name"]');
+        const p = state.players.find(x => x.id === id);
+        if (p && nameInput) p.name = nameInput.value;
+
+        if (id && state.players[idx]?.id !== id) {
+          const curIndex = state.players.findIndex(x => x.id === id);
+          if (curIndex > -1) {
+            const [m] = state.players.splice(curIndex, 1);
+            state.players.splice(idx, 0, m);
+          }
+        }
+      });
+    },
     bind() {
       $('#btnAdd').addEventListener('click', () => this.addPlayer(''));
       $('#btnClearPlayers').addEventListener('click', () => { state.players = []; this.renderPlayers(); this.persistDeferred(); });
@@ -109,10 +139,31 @@
         ev.target.value = '';
       });
 
-      $('#btnStart').addEventListener('click', () => {
+      $('#btnStart').addEventListener('click', async () => {
+        this.syncFromDOM();
         const v = Utils.validation();
         if (!v.ok) { this.flashNote(v.msg); return; }
-        Store.snapshotSession();
+
+        const startWordEl = $('#startWord');
+        const snap = {
+          players: state.players,
+          perHand: state.perHand,
+          seed: state.seed,
+          options: state.options,
+          cards: Utils.sanitizeCards(state.cardsRaw),
+          startWord: (startWordEl && startWordEl.value.trim()) || 'しりとり'
+        };
+
+        await clearSessionCaches();
+
+        localStorage.setItem('pitango.sessionSnapshot.v1', JSON.stringify(snap));
+        document.body.innerHTML = '';
+        const root = document.createElement('div');
+        root.style.padding = '24px';
+        document.body.appendChild(root);
+        const started = Game.startFromSnapshot();
+        if (!started) return;
+        Game.mount(root);
       });
 
       $('#btnReset').addEventListener('click', () => {
@@ -233,10 +284,28 @@
   };
 
   // ===== Simple Router (placeholder) =====
-  // 今後、ゲーム画面/結果画面に切替える場合は location.hash を利用する予定
   const Router = {
     init() { /* no-op for now */ },
     push(view) { location.hash = view; }
+  };
+
+  async function clearSessionCaches() {
+    try { localStorage.removeItem('pitango.gameState.v1'); } catch(_) {}
+    try { localStorage.removeItem('pitango.sessionSnapshot.v1'); } catch(_) {}
+
+    try {
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(r => r.unregister()));
+      }
+    } catch(_) {}
+
+    try {
+      if (window.caches && caches.keys) {
+        const names = await caches.keys();
+        await Promise.all(names.map(n => caches.delete(n)));
+      }
+    } catch(_) {}
   };
 
   // ===== Init =====
@@ -429,30 +498,4 @@ const Game = (() => {
   return {
     GAME_KEY, game, save, load, startFromSnapshot, mount
   };
-})();
-
-// Hook "開始" from Lobby to transition to game view
-(function attachGameStart(){
-  const startBtn = document.getElementById('btnStart');
-  if (!startBtn) return;
-  startBtn.addEventListener('click', () => {
-    // augment snapshot with startWord
-    const snapRaw = localStorage.getItem('pitango.sessionSnapshot.v1');
-    if (snapRaw) {
-      const snap = JSON.parse(snapRaw);
-      const startWordInput = document.getElementById('startWord');
-      snap.startWord = (startWordInput && startWordInput.value.trim()) || 'しりとり';
-      localStorage.setItem('pitango.sessionSnapshot.v1', JSON.stringify(snap));
-    }
-
-    // swap to game view
-    document.body.innerHTML = '';
-    const root = document.createElement('div');
-    root.style.padding = '24px';
-    document.body.appendChild(root);
-
-    const started = Game.startFromSnapshot();
-    if (!started) return;
-    Game.mount(root);
-  }, { once: true });
 })();

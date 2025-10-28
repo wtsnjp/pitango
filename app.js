@@ -32,7 +32,6 @@
         players: state.players,
         perHand: state.perHand,
         seed: state.seed,
-        options: state.options,
         cards: Utils.sanitizeCards(state.cardsRaw)
       }));
     }
@@ -138,7 +137,6 @@
           players: state.players,
           perHand: state.perHand,
           seed: state.seed,
-          options: state.options,
           cards: Utils.sanitizeCards(state.cardsRaw),
           startWord: (startWordEl && startWordEl.value.trim()) || 'しりとり'
         };
@@ -162,6 +160,15 @@
         state.cardsRaw = '';
         this.renderAll();
       });
+      const resumeInput = $('#fileResume');
+      if (resumeInput) {
+        resumeInput.addEventListener('change', async (ev) => {
+          const f = ev.target.files && ev.target.files[0];
+          if (!f) return;
+          await resumeFromExportFile(f);
+          ev.target.value = ''; // 同じファイルでも再選択できるように
+        });
+      }
     },
 
     // Player ops
@@ -287,6 +294,59 @@
     } catch(_) {}
   };
 
+  // ===== Resume from saved JSON (pitango-solo-export/v1) =====
+  async function resumeFromExportFile(file) {
+    try {
+      const text = await file.text();
+      const payload = JSON.parse(text);
+
+      if (!payload || payload.schema !== 'pitango-solo-export/v1') {
+        alert('このファイルは対応していない形式です。'); return;
+      }
+      const snap = payload.settings;
+      if (!snap || !Array.isArray(snap.players) || !Array.isArray(snap.cards)) {
+        alert('設定情報が壊れています。'); return;
+      }
+      if (!payload.hands || typeof payload.hands !== 'object') {
+        alert('手札情報が見つかりません。'); return;
+      }
+      if (!Array.isArray(payload.history)) {
+        alert('履歴情報が見つかりません。'); return;
+      }
+
+      try { localStorage.removeItem('pitango.gameState.v1'); } catch(_) {}
+      try { localStorage.removeItem('pitango.sessionSnapshot.v1'); } catch(_) {}
+
+      const snapshot = {
+        players: snap.players,
+        perHand: snap.perHand,
+        seed: snap.seed,
+        cards: snap.cards,
+        startWord: snap.startWord || 'しりとり'
+      };
+      localStorage.setItem('pitango.sessionSnapshot.v1', JSON.stringify(snapshot));
+
+      const gameState = {
+        players: snap.players,
+        hands: payload.hands,                 // {playerId: [{text, used}, ...]}
+        currentWord: payload.currentWord || snapshot.startWord,
+        history: payload.history              // [{playerId, cardIdx, cardText, saidWord, prevWord}, ...]
+      };
+      localStorage.setItem('pitango.gameState.v1', JSON.stringify(gameState));
+
+      document.body.innerHTML = '';
+      const root = document.createElement('div');
+      root.style.padding = '24px';
+      document.body.appendChild(root);
+
+      if (typeof Game?.load === 'function') Game.load();
+      if (typeof Game?.mount === 'function') Game.mount(root);
+    } catch (e) {
+      console.error(e);
+      alert('復元に失敗しました。ファイル内容をご確認ください。');
+    }
+  }
+
   // ===== Init =====
   window.addEventListener('DOMContentLoaded', () => {
     UI.init();
@@ -372,11 +432,15 @@ const Game = (() => {
     undoBtn.className = 'btn';
     undoBtn.textContent = '戻す';
     undoBtn.addEventListener('click', () => undo());
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'btn';
+    saveBtn.textContent = 'ゲームを保存';
+    saveBtn.addEventListener('click', () => exportGame());
     const backBtn = document.createElement('button');
     backBtn.className = 'btn ghost';
     backBtn.textContent = 'ロビーへ';
     backBtn.addEventListener('click', () => location.reload());
-    ctrls.append(undoBtn, backBtn);
+    ctrls.append(undoBtn, saveBtn, backBtn);
 
     header.append(word, ctrls);
 
@@ -474,7 +538,45 @@ const Game = (() => {
     refreshPlayerPanel(last.playerId);
   }
 
+  function downloadFile(filename, text, mime = 'application/json') {
+    const blob = new Blob([text], { type: `${mime};charset=utf-8` });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function exportGame() {
+    const snapshot = JSON.parse(localStorage.getItem('pitango.sessionSnapshot.v1') || 'null');
+    const hands = Object.fromEntries(
+      Object.entries(game.hands).map(([pid, arr]) => [pid, arr.map(c => ({ text: c.text, used: !!c.used }))])
+    );
+    const payload = {
+      schema: "pitango-solo-export/v1",
+      exportedAt: new Date().toISOString(),
+      settings: snapshot,              // players, perHand, seed, cards, startWord
+      currentWord: game.currentWord,
+      history: game.history.slice(),   // {playerId, cardIdx, cardText, saidWord, prevWord}[]
+      hands
+    };
+    const pad = n => String(n).padStart(2,'0');
+    const d = new Date();
+    const stamp = `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+    downloadFile(`pitango_game_${stamp}.json`, JSON.stringify(payload, null, 2), 'application/json');
+
+    // Optional: human-readable output
+    //const id2name = new Map(payload.settings.players.map((p, i) => [p.id, p.name || `プレイヤー${i+1}`]));
+    //const lines = [
+    //  `開始語: ${payload.settings.startWord}`,
+    //  `現在語: ${payload.currentWord}`,
+    //  `配布: ${payload.settings.perHand}枚/人`,
+    //  `履歴:`,
+    //  ...payload.history.map((h, i) => `${i+1}. ${id2name.get(h.playerId)} / [${h.cardText}] → 「${h.saidWord}」 (prev: ${h.prevWord})`)
+    //];
+    //downloadFile(`pitango_game_${stamp}.txt`, lines.join('\n'), 'text/plain');
+  }
+
   return {
-    GAME_KEY, game, save, load, startFromSnapshot, mount
+    GAME_KEY, game, save, load, startFromSnapshot, mount, exportGame
   };
 })();
